@@ -1,0 +1,114 @@
+library(tidyverse) 
+library(tibble)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(magrittr)
+library(ggplot2)
+
+######Import 
+#Initially, I Extracted the sample data-set ziped file into a folder.
+#As our program does not need to extract the ziped file we used the below code to import the data sets.Furthermore, the imported four files are without any modification by any other program.
+
+advertiser <- read_csv("~/Desktop/CA2-Stats Assignment/assignment_2_sample_data/advertiser.csv") # Advertiser data set imported and stored
+campaigns <- read_csv("~/Desktop/CA2-Stats Assignment/assignment_2_sample_data/campaigns.csv") # Camapigns data set imported and stored
+clicks <- read_tsv("~/Desktop/CA2-Stats Assignment/assignment_2_sample_data/clicks.tsv") # Clicks data set imported and stored
+impressions <- read_tsv("~/Desktop/CA2-Stats Assignment/assignment_2_sample_data/impressions.tsv") # Impressions data imported and stored
+
+######Transform
+Impression and click data both have date, time and timezone variables. Transform dates and times so that all data that the program outputs is in the UTC time zone. 
+You must write the logic for this transformation yourself. Using a 3rd party package such as lubridate will be heavily penalised (see Rubric).
+
+#Firstly we will identify the difference between the different time zones that are present in our Impression and click data.
+Within the data sets there are 3 time zones that have been identified.
+1. "EST" which  stands for Eastern Standard Time.
+2. "UTC" which which stands for Universal Time.
+3. "PST" which stands for Pacfic Time.
+As our objective is to transform any data within the Impression and click data from the timzone "EST" or "PST" into the UTC time and date.
+To do this we first need to identify the difference between each time zone, which is laid out below.
+##
+
+#### Universal Time Coordinated(UTC) vs Eastern Standard Time(EST)
+Eastern Standard Time is 5 hours behind of Universal Time Coordinated
+So 11:30 am in EST is 4:30 pm in UTC
+11:30 am Eastern Standard Time (EST). Offset UTC -5:00 hours 
+4:30 pm Universal Time Coordinated (UTC). Offset UTC 0:00 hours
+As a result of Eastern Standard Time zone being 5 hours behind the Universal Time Coordinated Zone, when we write our function to convert EST time & date into UTC time and dates. 
+we will increase the "time" variable by 5 hours for any instances where "Eastern time" is within the variable "Time Zone" and convert the timezone to "UTC".However it is important to note that as a result of 
+a 5 hour increase to time that the date variable is affected accordingly as the increase to time may result in the day going forward by 1.
+##
+
+######  Uiniversal Time (UTC) vs Pacfic Standard Time(PST)
+Pacific Standard Time is 8 hours behind of Universal Time Coordinated
+So 8:30 am in PST is 4:30 pm in UTC
+8:30 am Pacific Standard Time (PST). Offset UTC -8:00 hours 
+4:30 pm Universal Time Coordinated (UTC). Offset UTC 0:00 hours
+8:30 am PST / 4:30 pm UTC
+As a result of Pacific Standard Time Zone being 8 hours behind of the Universal Time Coordinated Zone, when we write our function to convert PST time & dates into UTC time and dates 
+we will increase "time" variable by 8 hours for any instances where "Pacific time" is within the variable "Time Zones" and convert the timezone to "UTC".However, again it is important to note that as a result of 
+an 8 hour increase to time that the date variable is affected accordingly as the increase to time may result in the day going forward by 1.
+##
+
+# Below is a function to convert all instances of time zones Eastern time & Pacific within a data frame into UTC timezones.
+
+df_utc_converter<-function(df){
+  
+  df$date<-paste(df$date,df$time) # The time variable is  merged with the date variable using the paste function. As to ensure any change to time will effect date accordingly 
+  names(df)[2] <- "date_and_time" # The date variable is renamed "date and time".
+  df$time<-NULL # we then discard the time variable as it serves no purpose
+  df$date_and_time<-as.POSIXct(df$date_and_time,format="%d/%m/%Y %H:%M:%S") # date_and_time variable is converted from string into data type POSIXct.
+  Eastern_Time<- filter(df, timezone == "Eastern time") # The inputed data frame is then filtered for instances where timezone = "Eastern time" and stored in a new data frame.
+  Eastern_Time$date_and_time<-Eastern_Time$date_and_time + 18000 # The Eastern time zone filtered results are then converted into UTC time by adding 5 hours which is 18,000 seconds 
+  UTC_Time<- filter(df, timezone == "UTC")#The inputed data frame is then filtered for instances where timezone = "UTC" and stored in a new data frame.
+  Pacific_Time<- filter(df, timezone == "Pacific time")#The inputed data frame is then filtered for instances where timezone = "Pacific time" and stored in a new data frame.
+  Pacific_Time$date_and_time<- Pacific_Time$date_and_time + 28000#The Pacific time zone filtered results are then converted into UTC time by adding 5 hours which is 28,800 seconds 
+  df<-do.call("rbind", list(Eastern_Time,Pacific_Time,UTC_Time)) # All recently created timezones dataframes are combined into one data frame
+  for (i in df$timezone){ # The timezone variable observations are then all converted into UTC
+    df$timezone <-"UTC"
+  }
+  return(df)
+}
+
+clicks<- df_utc_converter(clicks) # The clicks data frame is entered into the function and the updated data frame stored in the origianl name.
+impressions<-df_utc_converter(impressions)  # The impressions data frame is entered into the function and the updated data frame stored in the original name.
+
+####Join
+Add all columns from advertisers and campaigns into the impression and click data.
+Our objective is to join the advertsers,campaigns, and Impressions data sets into a unified data set called "Impressions_Processed" . Furthermore, we must also create another
+data set called "Clicks_Processed" by joining advertsers,campaigns, and clicks data sets.
+#
+
+###Impressions_Processed
+Firstly, we had to join the campaigns and advertiser data.However we had to identify the Primary keys and foreign  keys within the data as to ensure when we joined the sets there were no duplicates. For the data set 
+"advertiser" we identified that there were no foreign keys but a primary key was identified as the variable "ID". For the "campaigns" data set both a primary key and foreign key were identified, the foreign key was the variable "advertiser_id" which has
+a relationship with the data set "advertiser" and is stored under the variable "ID", and the primary key was found to be variable "id". We then preformed an Outer join using the function "right_join" as we wanted to keep all the observations in the second table, which would be 
+advertiser. However as we did not have a Single key column with the same name we had to specifiy the names in each data set and set the relationship to equal. The code to achieve this join can be seen below.
+##
+
+Ads_Campaigns<- right_join(campaigns,advertiser , by = c('advertiser_id' = 'ID')) 
+names(Ads_Campaigns)[3] <- "campaign name" # Due to both data sets "advertiser" & "campaigns" both having the variable "name" we must change the names in the newly combined data set "Ads_Campaign to correctly identify which name corresponds to which original data set
+names(Ads_Campaigns)[5] <- "advertiser name" 
+
+# Once the advertiser and campaigns data sets were correctly joined under the new variable "Ads_campaigns" with no unnesscssary duplicates we then continued to join "Ads_campaigns"
+# onto the impressions & clicks data sets.
+
+#For the "Impressions" data set a foreign key was identified, the foreign key was the variable "campaign_id" which has
+a relationship with our newly joined data set of "campaigns" and "advertisers" called "Ads_campaigns and is stored under the primary key variable "id". 
+Again we did not have a Single key column with the same name we had to specify the names in each data set and set the relationship to equal.
+##
+
+Impressions_Processed<-left_join(impressions,Ads_Campaigns, by = c('campaign_id' = 'id')) # Left join used to combine both the impressions and Ad_Campaigns data sets.
+
+#The same process was used for the joining the "clicks","advertisers" and "campaigns" data together as they shared the same foreign key and Single key columns names that needed to be set.
+
+####Clicks_Processed
+Clicks_Processed<-left_join(clicks,Ads_Campaigns, by = c('campaign_id' = 'id')) # # Left join used to combine both the clicks and Ad_Campaigns data sets.
+
+####Output
+After processing the data the program should write two CSV files Impressions_Processed.csv and Clicks_Processed.csv
+The below code writes 2 csv files called "Impressions_Processed" and "Clicks_Processed" and stores them in the assigned storage location.
+##
+
+write.csv(Impressions_Processed,"~/Desktop/CA2-Stats Assignment/assignment_2_sample_data/Impressions_Processed.csv", row.names = FALSE) # A CSV file is created for the Impressions processed data set and stored locally
+write.csv(Clicks_Processed,"~/Desktop/CA2-Stats Assignment/assignment_2_sample_data/Clicks_Processed.csv", row.names = FALSE) # # A CSV file is created for the clicks processed data set and stored locally.
+
